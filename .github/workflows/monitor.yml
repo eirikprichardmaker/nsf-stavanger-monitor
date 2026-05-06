@@ -1,0 +1,45 @@
+name: NSF møtemonitor
+
+on:
+  schedule:
+    # 10:00 UTC = 11:00 CET (vinter) / 12:00 CEST (sommer)
+    - cron: "0 10 * * *"
+  workflow_dispatch: {}  # manuell kjøring fra GitHub UI
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # nødvendig for å committe seen_documents.json
+
+    steps:
+      - name: Hent kode
+        uses: actions/checkout@v4
+
+      - name: Sett opp Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer avhengigheter
+        run: pip install -r requirements.txt
+
+      - name: Kjør monitor
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python monitor.py
+
+      - name: Commit oppdatert tilstand
+        run: |
+          git config user.name "nsf-monitor[bot]"
+          git config user.email "nsf-monitor[bot]@users.noreply.github.com"
+          git add seen_documents.json
+          if git diff --cached --quiet; then
+            echo "Ingen endringer i seen_documents.json – hopper over commit"
+          else
+            git commit -m "chore: oppdater seen_documents $(date -u +%Y-%m-%d)"
+            git push
+          fi
